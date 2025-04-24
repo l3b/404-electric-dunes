@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Abdla 404 - Desert Runner (More 404)</title> <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <style>
+        body { display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #1E2430; /* Near Black BG */ overflow: hidden; font-family: 'Poppins', 'Tajawal', sans-serif; }
+        #sketch-holder { }
+        canvas { display: block; border: 2px solid #008BDE; /* Electric Blue border */ box-shadow: 0 0 15px rgba(0, 139, 222, 0.5); /* Blue glow */ }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap" rel="stylesheet">
+
+</head>
+<body>
+    <div id="sketch-holder"></div>
+
+    <script>
+        const sketch = (p) => {
+
+            // --- Brand Colors ---
+            const electricBlue = '#008BDE';
+            const neonYellow = '#FFE600';
+            const teal = '#46C3B8';
+            const lavender = '#8F5CCC';
+            const nearWhite = '#F5F8FA';
+            const nearBlack = '#1E2430';
+            const coral = '#FF6961';
+            const lime = '#CCFF66';
+
+            // --- Game State Variables ---
+            let currentScene = 'intro';
+            let camel = null; let obstacles = []; let powerUps = [];
+            let score = 0; let gameSpeed = 4.5; let speedIncreaseRate = 0.0005;
+            let groundY; let bgX1 = 0; let bgX2;
+            const FLY_DURATION = 480; const MIN_FLY_HEIGHT = 50; const MAX_FLY_HEIGHT = 300;
+            const FLY_CONTROL_SPEED = 4; const FLY_JUMP_BOOST = -8; const CARPET_GRAVITY = 0.15;
+            const DESCEND_SPEED = 5; const DEFAULT_CAMEL_X = 100; const MIN_CAMEL_X = 50; const MAX_CAMEL_X = 550;
+            const FLY_TIMER_WARN_THRESHOLD = 120;
+
+            // --- Day/Night Cycle Variables ---
+            const CYCLE_DURATION = 8000;
+            let skyColor; let duneColor1, duneColor2, groundColor;
+            let sunMoonX, sunMoonY, sunMoonColor;
+            let stars = []; const NUM_STARS = 150;
+
+            // --- Audio Variables (Tone.js - currently disabled in triggers) ---
+            let jumpSynth, collectSynth, gameOverSynth, carpetJumpSynth;
+            let soundsReady = false; let audioStarted = false;
+
+            p.setup = () => {
+                console.log("Abdla Runner (More 404): Setup starting...");
+                let canvas = p.createCanvas(800, 400);
+                p.pixelDensity(1); p.noSmooth(); p.textFont('Poppins'); p.textAlign(p.CENTER, p.CENTER);
+                groundY = p.height - 50; bgX2 = p.width;
+                for (let i = 0; i < NUM_STARS; i++) { stars.push({ x: p.random(p.width), y: p.random(p.height * 0.7), offset: p.random(p.TWO_PI) }); }
+                console.log("Abdla Runner (More 404): Setup complete.");
+            };
+
+            function initializeAudio() { /* ... initializeAudio remains the same ... */
+                if (soundsReady) return; if (!audioStarted) { console.warn("Attempted to initialize audio before context started."); return; }
+                console.log("Camel Runner (Tone.js): Attempting to initialize audio objects...");
+                try {
+                    if (typeof Tone === 'undefined' || typeof Tone.Synth === 'undefined' || typeof Tone.NoiseSynth === 'undefined') { throw new Error("Tone.js library not loaded correctly."); }
+                    jumpSynth = new Tone.Synth({ oscillator: { type: 'triangle' }, envelope: { attack: 0.01, decay: 0.1, sustain: 0.1, release: 0.2 } }).toDestination(); jumpSynth.volume.value = -6;
+                    carpetJumpSynth = new Tone.Synth({ oscillator: { type: 'square' }, envelope: { attack: 0.01, decay: 0.1, sustain: 0.05, release: 0.15 } }).toDestination(); carpetJumpSynth.volume.value = -8;
+                    collectSynth = new Tone.Synth({ oscillator: { type: 'sine' }, envelope: { attack: 0.02, decay: 0.2, sustain: 0.2, release: 0.3 } }).toDestination(); collectSynth.volume.value = -4;
+                    gameOverSynth = new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.01, decay: 0.3, sustain: 0, release: 0.1 } }).toDestination(); gameOverSynth.volume.value = -10;
+                    soundsReady = true; console.log("Camel Runner (Tone.js): Audio objects initialized successfully.");
+                } catch (error) { console.error("Camel Runner (Tone.js): Error initializing audio objects!", error); soundsReady = false; }
+            }
+
+            p.draw = () => { /* ... draw switch remains the same ... */
+                switch (currentScene) { case 'intro': drawIntro(); break; case 'game': drawGame(); break; case 'gameOver': drawGameOver(); break; default: p.background(nearBlack); p.fill(nearWhite); p.textSize(20); p.text("Error: Unknown scene '" + currentScene + "'", p.width/2, p.height/2); }
+             };
+
+            async function startAudioAndInit() { /* ... startAudioAndInit remains the same ... */
+                 if (!audioStarted) { try { await Tone.start(); audioStarted = true; console.log("Tone.js Audio context started."); initializeAudio(); } catch (err) { console.error("Tone.js Audio context start failed:", err); soundsReady = false; } } else if (!soundsReady) { initializeAudio(); }
+            }
+
+            p.keyPressed = () => { /* ... keyPressed remains the same ... */
+                startAudioAndInit();
+                switch (currentScene) { case 'intro': if (p.keyCode === 32) startGame(); break; case 'game': if (camel) { if (camel.isFlying && p.keyCode === 32) { camel.carpetJump(); } else if (!camel.isFlying && p.keyCode === 32) { camel.jump(); } } break; case 'gameOver': if (p.keyCode === 32) startGame(); break; }
+             };
+
+            p.mousePressed = () => { /* ... mousePressed remains the same ... */
+                 startAudioAndInit();
+                 switch (currentScene) { case 'intro': startGame(); break; case 'game': if (camel && !camel.isFlying) camel.jump(); break; case 'gameOver': startGame(); break; }
+             };
+
+            function resetGame() { /* ... resetGame remains the same ... */
+                console.log("Abdla Runner: resetGame called"); score = 0; obstacles = []; powerUps = []; gameSpeed = 4.5; camel = new Camel(); bgX1 = 0; bgX2 = p.width;
+             }
+            function startGame() { /* ... startGame remains the same ... */
+                 console.log("Abdla Runner: startGame called"); startAudioAndInit(); resetGame(); currentScene = 'game'; console.log("Abdla Runner: Scene changed to 'game'");
+             }
+            function gameOver() { /* ... gameOver remains the same (sound disabled) ... */
+                console.log("Abdla Runner: gameOver called");
+                // if (audioStarted && soundsReady && gameOverSynth) { gameOverSynth.triggerAttackRelease("0.4"); }
+                currentScene = 'gameOver'; console.log("Abdla Runner: Scene changed to 'gameOver'");
+            }
+
+            // --- Scene Drawing Functions ---
+            function drawIntro() { /* ... Intro drawing remains the same ... */
+                p.background(nearBlack); p.textAlign(p.CENTER, p.CENTER); p.noStroke();
+                p.textFont('Poppins', 150); p.textStyle(p.BOLD); p.fill(electricBlue); p.text("404", p.width / 2, p.height / 2 - 70);
+                p.textFont('Poppins', 32); p.textStyle(p.NORMAL); p.fill(nearWhite); p.text("Lost in the Electric Dunes?", p.width / 2, p.height / 2 + 30);
+                p.textFont('Poppins', 20); p.fill(neonYellow); p.text("Click or Press SPACE to Start Running!", p.width / 2, p.height / 2 + 100);
+                p.push(); p.translate(p.width / 2, p.height - 40); p.scale(0.6); p.fill(teal); p.noStroke(); p.rectMode(p.CENTER); let bodyW = 50, bodyH = 35, headX = 25, headY = -25, humpY = -10; p.rect(0, 0, bodyW, bodyH, 5); p.rect(0, humpY, bodyW * 0.6, bodyH * 0.8, 8); p.rect(headX, headY, 15, 20, 3); p.rect(headX - 3, headY + 10, 5, 15); p.rect(-bodyW*0.3, bodyH*0.4, 8, 20); p.rect(bodyW*0.3, bodyH*0.4, 8, 20); p.fill(nearWhite); p.ellipse(headX + 3, headY - 3, 4, 4); p.pop();
+             }
+
+            function drawGame() { /* ... Game drawing logic mostly the same ... */
+                if (!camel || typeof groundY === 'undefined') { return; }
+                let timeInCycle = (p.frameCount * (gameSpeed / 4.5)) % CYCLE_DURATION; let cyclePercent = timeInCycle / CYCLE_DURATION; updateColors(cyclePercent);
+                p.background(skyColor); p.imageMode(p.CORNER); p.noSmooth(); drawCelestialBodies(cyclePercent); if (isNight(cyclePercent)) { drawStars(); }
+                p.fill(duneColor1); p.noStroke(); drawDunes(bgX1, 60, 0.5); drawDunes(bgX2, 60, 0.5); p.fill(duneColor2); drawDunes(bgX1 * 1.5, 40, 0.75); drawDunes(bgX2 * 1.5, 40, 0.75); p.fill(groundColor); p.rect(0, groundY, p.width, p.height - groundY);
+                bgX1 -= gameSpeed * 0.3; bgX2 -= gameSpeed * 0.3; if (bgX1 <= -p.width) bgX1 = p.width; if (bgX2 <= -p.width) bgX2 = p.width;
+                let powerUpSpawnProb = 0.002; if (p.random(1) < powerUpSpawnProb && p.frameCount > 300 && powerUps.length === 0) { let lastOb = obstacles[obstacles.length - 1]; let safeSpawnX = p.width; if(lastOb && (p.width - lastOb.x) < 100) { safeSpawnX = p.width + 100; } powerUps.push(new PowerUp(safeSpawnX, groundY - 40)); console.log("Spawned Magic Carpet"); }
+                for (let i = powerUps.length - 1; i >= 0; i--) {
+                    powerUps[i].move(); powerUps[i].show(); if (camel.hits(powerUps[i])) { console.log("Collected Magic Carpet!"); /* Sound disabled */ camel.activateFlying(); powerUps.splice(i, 1); } else if (powerUps[i].x < -powerUps[i].w) { powerUps.splice(i, 1); }
+                }
+                // <<< Obstacle Spawning Includes 'glitch404' type >>>
+                let spawnProb = 0.015; if (p.random(1) < spawnProb && p.frameCount > 30) { let lastOb = obstacles[obstacles.length - 1]; let minDist = p.width * 0.4 + gameSpeed * 12; if (!lastOb || (p.width - lastOb.x) > minDist) { obstacles.push(new Obstacle()); } }
+                for (let i = obstacles.length - 1; i >= 0; i--) {
+                    obstacles[i].move(); obstacles[i].show(); if (camel.hits(obstacles[i])) { console.log("Collision detected with obstacle!"); gameOver(); return; } if (obstacles[i].x < -obstacles[i].w) { obstacles.splice(i, 1); score++; }
+                }
+                if (!camel.isFlying && p.keyIsDown(p.DOWN_ARROW)) { camel.duck(true); } else { camel.duck(false); } camel.move(); camel.show();
+                p.fill(nearBlack); p.textFont('Poppins', 24); p.textStyle(p.NORMAL); p.textAlign(p.LEFT, p.TOP); p.text("Score: " + score, 10, 10); p.text("Speed: " + p.nf(gameSpeed, 1, 1), 10, 40);
+                if (camel.isFlying) { let secondsLeft = p.ceil(camel.flyTimer / 60); let timerColor = p.color(lavender); if (camel.flyTimer < FLY_TIMER_WARN_THRESHOLD) { if (p.frameCount % 40 < 20) { timerColor = p.color(coral); } else { timerColor = p.color(p.red(coral) * 0.7, p.green(coral) * 0.7, p.blue(coral) * 0.7); } } p.fill(timerColor); p.text("Flying: " + secondsLeft, 10, 70); }
+                gameSpeed += speedIncreaseRate;
+             }
+
+            function updateColors(cyclePercent) { /* ... updateColors remains the same ... */
+                const dawnStartSky = p.color(nearBlack); const dawnPeakSky = p.color(coral); const noonSky = p.color(electricBlue); const duskPeakSky = p.color(lavender); const nightSky = p.color(nearBlack);
+                const dawnDune1 = p.color(p.lerpColor(p.color(nearBlack), p.color(teal), 0.4)); const noonDune1 = p.color(teal); const duskDune1 = p.color(p.lerpColor(p.color(lavender), p.color(teal), 0.6)); const nightDune1 = p.color(p.lerpColor(p.color(nearBlack), p.color(teal), 0.2));
+                const dawnDune2 = p.color(p.lerpColor(p.color(nearBlack), p.color(electricBlue), 0.5)); const noonDune2 = p.color(electricBlue); const duskDune2 = p.color(p.lerpColor(p.color(lavender), p.color(electricBlue), 0.5)); const nightDune2 = p.color(p.lerpColor(p.color(nearBlack), p.color(electricBlue), 0.3));
+                const dawnGround = p.color(p.lerpColor(p.color(nearBlack), p.color(neonYellow), 0.3)); const noonGround = p.color(neonYellow); const duskGround = p.color(p.lerpColor(p.color(coral), p.color(neonYellow), 0.4)); const nightGround = p.color(p.lerpColor(p.color(nearBlack), p.color(neonYellow), 0.15));
+                const dawnDuration = 0.15; const dayDuration = 0.35; const duskDuration = 0.15;
+                if (cyclePercent < dawnDuration) { let phasePercent = cyclePercent / dawnDuration; skyColor = p.lerpColor(nightSky, dawnPeakSky, phasePercent); duneColor1 = p.lerpColor(nightDune1, dawnDune1, phasePercent); duneColor2 = p.lerpColor(nightDune2, dawnDune2, phasePercent); groundColor = p.lerpColor(nightGround, dawnGround, phasePercent); }
+                else if (cyclePercent < dawnDuration + dayDuration) { let phasePercent = (cyclePercent - dawnDuration) / dayDuration; if (phasePercent < 0.5) { skyColor = p.lerpColor(dawnPeakSky, noonSky, phasePercent * 2); duneColor1 = p.lerpColor(dawnDune1, noonDune1, phasePercent * 2); duneColor2 = p.lerpColor(dawnDune2, noonDune2, phasePercent * 2); groundColor = p.lerpColor(dawnGround, noonGround, phasePercent * 2); } else { skyColor = p.lerpColor(noonSky, duskPeakSky, (phasePercent - 0.5) * 2); duneColor1 = p.lerpColor(noonDune1, duskDune1, (phasePercent - 0.5) * 2); duneColor2 = p.lerpColor(noonDune2, duskDune2, (phasePercent - 0.5) * 2); groundColor = p.lerpColor(noonGround, duskGround, (phasePercent - 0.5) * 2); } }
+                else if (cyclePercent < dawnDuration + dayDuration + duskDuration) { let phasePercent = (cyclePercent - (dawnDuration + dayDuration)) / duskDuration; skyColor = p.lerpColor(duskPeakSky, nightSky, phasePercent); duneColor1 = p.lerpColor(duskDune1, nightDune1, phasePercent); duneColor2 = p.lerpColor(duskDune2, nightDune2, phasePercent); groundColor = p.lerpColor(duskGround, nightGround, phasePercent); }
+                else { skyColor = nightSky; duneColor1 = nightDune1; duneColor2 = nightDune2; groundColor = nightGround; }
+            }
+            function drawCelestialBodies(cyclePercent) { /* ... celestial body logic remains the same ... */
+                let angle = cyclePercent * p.TWO_PI; let bodyRadius = 25; let yCenter = p.height * 0.4; let yAmplitude = p.height * 0.3; sunMoonY = yCenter - p.sin(angle) * yAmplitude; sunMoonX = p.map(p.cos(angle), 1, -1, -bodyRadius, p.width + bodyRadius); p.noStroke(); if (angle > 0 && angle < p.PI) { sunMoonColor = p.color(neonYellow); bodyRadius = 25; } else { sunMoonColor = p.color(nearWhite); bodyRadius = 20; } p.fill(sunMoonColor); p.ellipse(sunMoonX, sunMoonY, bodyRadius * 2, bodyRadius * 2);
+            }
+            function isNight(cyclePercent) { /* ... isNight logic remains the same ... */ const nightStartTime = 0.65; return cyclePercent > nightStartTime; }
+            function drawStars() { /* ... drawStars logic remains the same ... */ p.push(); p.strokeWeight(2); for (let star of stars) { let pulse = p.sin(p.frameCount * 0.05 + star.offset); let starAlpha = p.map(pulse, -1, 1, 50, 200); p.stroke(255, 255, 255, starAlpha); p.point(star.x, star.y); } p.pop(); }
+            function drawDunes(offsetX, amplitude, speedFactor) { /* ... Dune drawing remains the same ... */ p.beginShape(); p.vertex(offsetX - 50, groundY); for (let x = 0; x <= p.width + 100; x += 50) { let y = groundY - p.noise(x * 0.01, offsetX * 0.005 * speedFactor) * amplitude; p.curveVertex(x + offsetX, y); } p.vertex(p.width + 50 + offsetX, groundY); p.endShape(p.CLOSE); }
+
+            // <<< Updated Game Over Scene (404 Style) >>>
+            function drawGameOver() {
+                p.background(nearBlack); // Dark background like intro
+                p.textAlign(p.CENTER, p.CENTER);
+                p.noStroke();
+
+                // Large 404
+                p.textFont('Poppins', 150);
+                p.textStyle(p.BOLD);
+                p.fill(coral); // Use Coral Red for Game Over 404
+                p.text("404", p.width / 2, p.height / 2 - 70);
+
+                // Subtitle
+                p.textFont('Poppins', 32);
+                p.textStyle(p.NORMAL);
+                p.fill(nearWhite);
+                p.text("Run Ended!", p.width / 2, p.height / 2 + 30); // Different subtitle
+
+                 // Final Score
+                p.textFont('Poppins', 28);
+                p.fill(nearWhite);
+                p.text("Final Score: " + score, p.width / 2, p.height / 2 + 75);
+
+                // Restart Prompt
+                p.textFont('Poppins', 20);
+                p.fill(neonYellow); // Accent color
+                p.text("Click or Press SPACE to Restart", p.width / 2, p.height / 2 + 120);
+             }
+
+            // ===================================
+            // --- Game Object Classes         ---
+            // ===================================
+
+            class Camel { /* ... Camel class remains the same ... */
+                constructor() { this.baseSize = 50; this.x = DEFAULT_CAMEL_X; this.y = groundY - this.baseSize / 2; this.vy = 0; this.gravity = 0.8; this.lift = -18; this.isDucking = false; this.standHeight = this.baseSize; this.standWidth = this.baseSize * 0.9; this.duckHeight = this.baseSize * 0.6; this.duckWidth = this.baseSize * 1.1; this.isFlying = false; this.flyTimer = 0; this.isCarpetJumping = false; console.log("Camel created at y:", this.y); }
+                jump() { if (!this.isFlying && this.y >= groundY - this.standHeight / 2 - 5) { this.vy = this.lift; /* Sound disabled */ console.log("Camel jump!"); } }
+                carpetJump() { if (this.isFlying && !this.isCarpetJumping) { this.isCarpetJumping = true; this.vy = this.lift; /* Sound disabled */ console.log("Carpet jump boost!"); } }
+                duck(shouldDuck) { if (this.isFlying || this.isCarpetJumping) { this.isDucking = false; return; } const currentHeight = this.isDucking ? this.duckHeight : this.standHeight; const onGround = (this.y >= groundY - currentHeight / 2); this.isDucking = shouldDuck; if (onGround) { const targetHeight = this.isDucking ? this.duckHeight : this.standHeight; this.y = groundY - targetHeight / 2; } }
+                activateFlying() { if (!this.isFlying) { this.isFlying = true; this.isDucking = false; this.isCarpetJumping = false; this.flyTimer = FLY_DURATION; this.vy = 0; this.y = groundY - MIN_FLY_HEIGHT - this.standHeight/2; console.log("Flying activated!"); } else { this.flyTimer = FLY_DURATION; console.log("Flying timer reset!"); } }
+                stopFlying() { if (this.isFlying) { this.isFlying = false; this.isCarpetJumping = false; this.flyTimer = 0; this.vy = 1; console.log("Flying deactivated"); } }
+                move() { if (this.isFlying) { if (this.isCarpetJumping) { this.y += this.vy; this.vy += this.gravity; const flightZoneTop = groundY - MAX_FLY_HEIGHT; if (this.vy > 0 && this.y >= flightZoneTop) { console.log("Landed back on carpet level"); this.isCarpetJumping = false; this.vy = 0; this.y = p.constrain(this.y, flightZoneTop, groundY - MIN_FLY_HEIGHT); } if (p.keyIsDown(p.LEFT_ARROW)) { this.x -= FLY_CONTROL_SPEED; } if (p.keyIsDown(p.RIGHT_ARROW)) { this.x += FLY_CONTROL_SPEED; } } else { this.y += this.vy; this.vy += CARPET_GRAVITY; if (p.keyIsDown(p.UP_ARROW)) { this.y -= FLY_CONTROL_SPEED; this.vy = 0; } if (p.keyIsDown(p.DOWN_ARROW)) { this.y += FLY_CONTROL_SPEED; this.vy = 0; } if (p.keyIsDown(16)) { this.y += DESCEND_SPEED; this.vy = 0; if (this.y >= groundY - this.standHeight / 2 - DESCEND_SPEED) { this.stopFlying(); this.y = groundY - this.standHeight / 2; } } this.y = p.constrain(this.y, groundY - MAX_FLY_HEIGHT, groundY - MIN_FLY_HEIGHT); if (p.keyIsDown(p.LEFT_ARROW)) { this.x -= FLY_CONTROL_SPEED; } if (p.keyIsDown(p.RIGHT_ARROW)) { this.x += FLY_CONTROL_SPEED; } } this.x = p.constrain(this.x, MIN_CAMEL_X, MAX_CAMEL_X); this.flyTimer--; if (this.flyTimer <= 0) { this.stopFlying(); } } else { this.y += this.vy; this.vy += this.gravity; let currentHeight = this.isDucking ? this.duckHeight : this.standHeight; this.y = p.constrain(this.y, 0, groundY - currentHeight / 2); this.x = p.lerp(this.x, DEFAULT_CAMEL_X, 0.05); } }
+                hits(other) { if (!other) return false; let camelH = this.isDucking ? this.duckHeight : this.standHeight; let camelW = this.isDucking ? this.duckWidth : this.standWidth; let camelTop = this.y - camelH / 2; let camelBot = this.y + camelH / 2; let camelL = this.x - camelW / 2; let camelR = this.x + camelW / 2; let otherTop = other.y - other.h / 2; let otherBot = other.y + other.h / 2; let otherL = other.x - other.w / 2; let otherR = other.x + other.w / 2; return (camelR > otherL && camelL < otherR && camelBot > otherTop && camelTop < otherBot); }
+                show() { /* ... show remains the same ... */ p.push(); p.translate(this.x, this.y); if (this.isFlying && !this.isCarpetJumping) { p.fill(lavender); p.rect(0, this.standHeight / 2 + 5, this.standWidth * 1.2, 10, 3); p.stroke(neonYellow); p.strokeWeight(2); p.line(-this.standWidth*0.6, this.standHeight/2+10, -this.standWidth*0.6-5, this.standHeight/2+15); p.line(this.standWidth*0.6, this.standHeight/2+10, this.standWidth*0.6+5, this.standHeight/2+15); p.noStroke(); } let bodyColor = p.color(teal); if (this.isCarpetJumping) { bodyColor = p.color(lime); } else if (this.isFlying) { bodyColor = p.color(electricBlue); } p.fill(bodyColor); p.noStroke(); p.rectMode(p.CENTER); let headX = this.standWidth * 0.4; let headY = -this.standHeight * 0.4; let neckH = this.standHeight * 0.3; let neckW = 8; let headW = 15; let headH = 20; let legW = 8; let legH = this.standHeight * 0.4; if (this.isDucking && !this.isFlying && !this.isCarpetJumping) { let duckBodyH = this.duckHeight * 0.8; let duckHumpH = this.duckHeight * 0.5; p.rect(0, 0, this.duckWidth, duckBodyH, 5); p.rect(0, -duckBodyH * 0.3, this.duckWidth * 0.5, duckHumpH, 8); let duckHeadX = this.duckWidth * 0.3; let duckHeadY = -duckBodyH * 0.1; p.rect(duckHeadX, duckHeadY, headW * 0.8, headH * 0.8, 3); p.rect(duckHeadX - 5, duckHeadY + 5, neckW * 0.8, neckH * 0.6, 2); p.rect(-this.duckWidth*0.3, duckBodyH*0.3, legW, legH*0.5); p.rect(this.duckWidth*0.3, duckBodyH*0.3, legW, legH*0.5); p.fill(nearWhite); p.ellipse(duckHeadX + 3, duckHeadY - 2, 3, 3); } else { let bodyH = this.standHeight * 0.7; let bodyW = this.standWidth; let humpY = -bodyH * 0.3; let humpW = bodyW * 0.6; let humpH = this.standHeight * 0.5; p.rect(0, 0, bodyW, bodyH, 5); p.rect(0, humpY, humpW, humpH, 8); p.rect(headX - neckW/2, headY + neckH/2, neckW, neckH, 2); p.rect(headX, headY, headW, headH, 3); p.rect(-bodyW*0.3, bodyH*0.4, legW, legH, 2); p.rect(bodyW*0.3, bodyH*0.4, legW, legH, 2); p.fill(nearWhite); p.ellipse(headX + 4, headY - 3, 4, 4); } p.pop(); }
+            }
+
+            // <<< Obstacle Class Updated >>>
+            class Obstacle {
+                constructor() {
+                    // Added 'glitch404' type, increased its probability slightly
+                    let typeRoll = p.random(1);
+                    if (typeRoll < 0.15) { this.type = 'glitch404'; } // 15% chance
+                    else if (typeRoll < 0.50) { this.type = 'palm'; } // 35% chance
+                    else if (typeRoll < 0.80) { this.type = 'cactus'; } // 30% chance
+                    else { this.type = 'rock'; } // 20% chance
+
+                    // Set dimensions based on type
+                    if (this.type === 'palm') { this.h = p.random(60, 100); this.w = p.random(15, 25); }
+                    else if (this.type === 'cactus') { this.h = p.random(40, 70); this.w = p.random(30, 50); }
+                    else if (this.type === 'glitch404') { this.h = p.random(40, 60); this.w = p.random(70, 100); } // Wider for text
+                    else { this.h = p.random(25, 50); this.w = p.random(30, 60); } // Rock
+
+                    this.x = p.width;
+                    // Adjust Y position slightly for text obstacle
+                    this.y = (this.type === 'glitch404') ? groundY - this.h * 0.6 : groundY - this.h / 2;
+                }
+                move() { this.x -= gameSpeed; }
+                show() {
+                    p.push(); p.translate(this.x, this.y); p.rectMode(p.CENTER); p.noStroke();
+                    if (this.type === 'palm') { /* ... palm drawing same ... */ let trunkH = this.h * 0.8; let trunkY = this.h * 0.1; p.fill(p.lerpColor(p.color(nearBlack), p.color(teal), 0.6)); p.rect(0, trunkY, this.w, trunkH, 2); p.fill(lime); let leafY = -this.h / 2 + 5; p.ellipse(0, leafY, this.w * 3, this.w * 2); p.triangle(-this.w*1.5, leafY, this.w*1.5, leafY, 0, leafY - this.w*2); p.triangle(-this.w*1.2, leafY+5, this.w*1.2, leafY+5, -this.w*0.5, leafY + this.w*1.5); p.triangle(-this.w*1.2, leafY+5, this.w*1.2, leafY+5, this.w*0.5, leafY + this.w*1.5); }
+                    else if (this.type === 'cactus') { /* ... cactus drawing same ... */ p.fill(lime); p.rect(0, 0, this.w, this.h, 4); p.rect(-this.w*0.4, -this.h*0.1, this.w*0.3, this.h*0.6, 3); p.rect(this.w*0.4, this.h*0.05, this.w*0.3, this.h*0.4, 3); }
+                    else if (this.type === 'glitch404') { // <<< Draw 404 Obstacle >>>
+                        p.textFont('Poppins', this.h * 0.8); // Size text relative to height
+                        p.textStyle(p.BOLD);
+                        // Add simple glitch effect by drawing slightly offset versions
+                        let offsetX = p.sin(p.frameCount * 0.5 + this.x * 0.1) * 3; // Horizontal jitter
+                        let offsetY = p.cos(p.frameCount * 0.4 + this.x * 0.1) * 2; // Vertical jitter
+                        p.fill(coral, 150); // Semi-transparent Coral shadow
+                        p.text("404", offsetX, offsetY);
+                        p.fill(electricBlue); // Main Electric Blue text
+                        p.text("404", 0, 0);
+                    }
+                    else { /* ... rock drawing same ... */ p.fill(p.lerpColor(p.color(nearBlack), p.color(lavender), 0.5)); p.ellipse(0, 0, this.w, this.h); p.fill(p.lerpColor(p.color(nearBlack), p.color(lavender), 0.3)); p.ellipse(-this.w*0.2, this.h*0.1, this.w*0.3, this.h*0.3); p.ellipse(this.w*0.25, -this.h*0.15, this.w*0.4, this.h*0.2); }
+                    p.pop();
+                }
+             }
+
+            class PowerUp { /* ... PowerUp class remains the same ... */
+                constructor(x, y) { this.x = x; this.y = y; this.w = 40; this.h = 20; this.type = 'magicCarpet'; } move() { this.x -= gameSpeed; } show() { p.push(); p.translate(this.x, this.y); p.fill(lavender); p.rect(0, 0, this.w, this.h, 5); p.fill(neonYellow); p.ellipse(0, 0, this.w * 0.6, this.h * 0.4); p.rect(0, 0, this.w * 0.2, this.h * 0.8); p.stroke(neonYellow); p.strokeWeight(2); p.line(-this.w/2, -this.h/2+2, -this.w/2-5, -this.h/2+2); p.line(-this.w/2, this.h/2-2, -this.w/2-5, this.h/2-2); p.line(this.w/2, -this.h/2+2, this.w/2+5, -this.h/2+2); p.line(this.w/2, this.h/2-2, this.w/2+5, this.h/2-2); p.pop(); }
+             }
+
+        }; // End of sketch function definition
+
+        let myp5 = new p5(sketch, 'sketch-holder');
+        console.log("p5 instance created for manual scene management.");
+
+    </script>
+</body>
+</html>
