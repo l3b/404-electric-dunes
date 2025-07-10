@@ -52,4 +52,4 @@ Built with p5.js and incorporating the vibrant "Electric Dunes" color palette, t
 * Implement a high score saving mechanism using `localStorage`.
 * Add more visual variety to obstacles or background elements.
 * Create more detailed pixel art for the camel and obstacles.
-* Integrate specific brand elements like the logo more prominentl
+* Integrate specific brand elements like the logo more prominently
