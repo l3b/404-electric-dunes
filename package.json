@@ -1,0 +1,17 @@
+{
+  "name": "404-electric-dunes",
+  "version": "1.0.0",
+  "description": "![Electric Dunes Banner](https://placehold.co/800x200/1E2430/F5F8FA?text=Abdla%20404%20-%20Electric%20Dunes%20Runner) *(Replace the placeholder above with a cool banner image!)*",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "jest": "^30.0.4",
+    "jsdom": "^26.1.0"
+  }
+}
